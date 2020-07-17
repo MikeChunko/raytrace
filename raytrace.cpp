@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <cmath>
 
 using namespace std;
@@ -67,8 +68,8 @@ struct Sphere {
 
     bool intersect(const Ray& ray, double &t) const {
         const Vec oc = ray.origin - center;
-        const double b = 2 * dot(oc, ray.direction);
-        const double c = dot(oc, oc) - radius*radius;
+        const double b = 2 * dot(oc, ray.direction),
+        			 c = dot(oc, oc) - radius*radius;
         double disc = b*b - 4*c;
 
         if (disc < 1e-3)  // Reasonably close to 0 should be accepted as being 0
@@ -100,28 +101,35 @@ int main() {
               black(0,0,0),
               green(0,255,0);
 
+    ofstream out = ofstream("result.ppm");
+    out << "P3\n" << WIDTH << ' ' << HEIGHT << " 255\n";
+
     // Scene creation
     const Sphere sphere(Vec(.5*WIDTH, .5*HEIGHT, 50), .25*WIDTH),  // Sphere centered and with diameter half as wide as the screen
                  light(Vec(0,0,50), 1);  // Point light source at the same depth as the sphere
 
+	double t;
+	Vec color;
+
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
+            color = Vec(0,0,0);  // Initialize to black (nothing)
             const Ray ray(Vec(x,y,0), Vec(0,0,1));  // Initial ray
-            Vec color(0,0,0);  // Initialize to black (nothing)
 
-            // TODO: Turn pseudocode into real code
-            /*
-            intersecting_obj = find_intersect(&objects, ray);
-            if (intersecting_obj != null) {
-                some ray tracing magic
-            }
-            */
+            if (sphere.intersect(ray, t)) { // Do some funky math (not sure on how this works)
+				const Vec p = ray.origin + ray.direction*t,
+						  l = light.center - p,
+						  n = sphere.normal(p);
+				// TODO: determine pixel color from these
+			}
 
+            // ! Debug
             cout << color;
             if (x < WIDTH - 1)
                 cout << ", ";
 
-            // TODO: Turn this into an actual image format instead of printing the clors
+            color_clamp(color);
+            out << (int)color.x << ' ' << (int)color.y << ' ' << (int)color.z << "\n";
         }
         cout << endl;
     }
