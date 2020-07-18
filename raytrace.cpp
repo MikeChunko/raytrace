@@ -1,4 +1,3 @@
-#include <iostream>
 #include <fstream>
 #include <cmath>
 
@@ -29,8 +28,8 @@ struct Vec {
 
     // Return a normalized unit vector
     Vec normalize() const {
-        double mean = sqrt(x*x + y*y + z*z);
-        return Vec(x/mean, y/mean, z/mean);
+        double length = sqrt(x*x + y*y + z*z);
+        return Vec(x/length, y/length, z/length);
     }
 };
 
@@ -83,7 +82,7 @@ struct Sphere {
     }
 
     Vec normal(const Vec& p) const {
-        return (p - center) / radius;
+        return (p - center).normalize();
     }
 };
 
@@ -94,12 +93,11 @@ void color_clamp(Vec& v) {
     v.z = (v.z > 255) ? 255 : (v.z < 0) ? 0 : v.z;
 }
 
-
 int main() {
     const int HEIGHT = 200, WIDTH = 200;  // Image height and width
-    const Vec white(255,255,255), // Quick reference colors
+    const Vec white(255,244,229), // Quick reference colors
               black(0,0,0),
-              green(0,255,0);
+              green(0,230,0);
 
     // Header for .ppm
     ofstream out = ofstream("result.ppm");
@@ -107,21 +105,21 @@ int main() {
 
     // Scene creation
     const Sphere sphere(Vec(.5*WIDTH, .5*HEIGHT, 50), green, .5*WIDTH),  // Sphere centered and with diameter half as wide as the screen
-                 light(Vec(1.5*WIDTH,1.5*HEIGHT, 50), white, 1);  // Point light source at the same depth as the sphere
+                 light(Vec(1.5*WIDTH, 1.5*HEIGHT, 50), white, 1);  // Point light source at the same depth as the sphere
 
 	double t;
 	Vec color;
 
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
-            color = black;  // Initialize to black (nothing)
+            color = black;
             const Ray ray(Vec(x,y,0), Vec(0,0,1));  // Initial ray
 
-            if (sphere.intersect(ray, t)) {  // Do some funky math (not sure on how this works)
+            if (sphere.intersect(ray, t)) {
 				const Vec p = ray.origin + ray.direction*t,
-						  l = light.center - p,
-						  n = sphere.normal(p);
-				const double dt = dot(l.normalize(), n.normalize());
+						  n = sphere.normal(p),
+						  l = (light.center - p).normalize();
+				const double dt = dot(l, n);
 
                 color = (sphere.color + light.color*dt) * .5;
 			}
@@ -130,6 +128,5 @@ int main() {
             color_clamp(color);
             out << (int)color.x << ' ' << (int)color.y << ' ' << (int)color.z << "\n";
         }
-        cout << endl;
     }
 }
