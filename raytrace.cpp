@@ -1,4 +1,6 @@
 #include <fstream>
+#include <vector>
+#include <limits>
 #include <cmath>
 
 using namespace std;
@@ -97,32 +99,48 @@ int main() {
     const int HEIGHT = 200, WIDTH = 200;  // Image height and width
     const Vec white(255,244,229), // Quick reference colors
               black(0,0,0),
-              green(0,230,0);
+              green(0,230,0),
+              red(230,0,0);
 
     // Header for .ppm
     ofstream out = ofstream("result.ppm");
     out << "P3\n" << WIDTH << ' ' << HEIGHT << " 255\n";
 
     // Scene creation
-    const Sphere sphere(Vec(.5*WIDTH, .5*HEIGHT, 50), green, .5*WIDTH),  // Sphere centered and with diameter half as wide as the screen
-                 light(Vec(1.5*WIDTH, 1.5*HEIGHT, 50), white, 1);  // Point light source at the same depth as the sphere
+    // Assume objects,back() is the light source
+    vector<Sphere> objects; // Assume every obect in the sceneis a sphere for now
+    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, 85), green, .4*WIDTH));  // Sphere centered and with diameter half as wide as the screen
+    objects.push_back(Sphere(Vec(.5*WIDTH + 10, .25*HEIGHT + 10, 8), red, .2*WIDTH));
+    objects.push_back(Sphere(Vec(1.5*WIDTH, 1.5*HEIGHT, 50), white, 1)); // Point light source at the same depth as the sphere
 
 	double t;
+    int min_t;
 	Vec color;
 
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             color = black;
             const Ray ray(Vec(x,y,0), Vec(0,0,1));  // Initial ray
+            min_t = numeric_limits<int>::max();
+            Sphere min_obj;
 
-            if (sphere.intersect(ray, t)) {
-				const Vec p = ray.origin + ray.direction*t,
-						  n = sphere.normal(p),
-						  l = (light.center - p).normalize();
-				const double dt = dot(l, n);
+            // Find closest interecting object
+            for (auto obj = objects.begin(); obj < objects.end() - 1; obj++) {
+                if (obj->intersect(ray, t) && t < min_t) {
+                    min_t = t;
+                    min_obj = *obj;
+                }
+            }
 
-                color = (sphere.color + light.color*dt) * .5;
-			}
+            // There is an object the ray intersects with
+            if (min_t != INFINITY) {
+                const Vec p = ray.origin + ray.direction*min_t,
+                          n = min_obj.normal(p),
+                          l = (objects.back().center - p).normalize();
+                const double dt = dot(l, n);
+
+                color = (min_obj.color + objects.back().color*dt) * .5;
+            }
 
             // Output color at current pixel
             color_clamp(color);
