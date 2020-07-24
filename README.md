@@ -8,4 +8,6 @@ Currently the raytracer is capable of:
 
 There are plans to expand on the number of features, but even this short list is capable of generating a rudimentary image.
 
-![An example image of 3 raytraced spheres](https://github.com/MikeChunko/raytrace/blob/master/result.png)
+<p align="center">
+  <img src="https://github.com/MikeChunko/raytrace/blob/master/result.png">
+</p>
