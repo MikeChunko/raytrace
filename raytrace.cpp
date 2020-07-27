@@ -12,23 +12,23 @@ struct Vec {
     Vec() : x(0), y(0), z(0) {};
     Vec(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {};
 
+    // Vector operations
     Vec operator+(const Vec& v) const {
         return Vec(x + v.x, y + v.y, z + v.z);
     }
-
     Vec operator-(const Vec& v) const {
         return Vec(x - v.x, y - v.y, z - v.z);
     }
 
+    // Scalar operations
     Vec operator*(double c) const {
         return Vec(c * x, c * y, c * z);
     }
-
     Vec operator/(double c) const {
         return Vec(x / c, y / c, z / c);
     }
 
-    // Return a normalized unit vector
+    // Return a normalized unit vector (magnitude of 1)
     Vec normalize() const {
         double length = sqrt(x*x + y*y + z*z);
         return Vec(x/length, y/length, z/length);
@@ -67,6 +67,8 @@ struct Sphere {
     Sphere() { center = Vec(); color = Vec(); radius = 0; }
     Sphere(const Vec& c, const Vec& col, double r) : center(c), color(col), radius(r) {}
 
+    // Return true if ray intersects with the sphere
+    // If true, t will hold the minimum intersecting t-value
     bool intersect(const Ray& ray, double &t) const {
         const Vec oc = ray.origin - center;
         const double b = 2 * dot(oc, ray.direction),
@@ -83,6 +85,7 @@ struct Sphere {
         return true;
     }
 
+    // Return the vector normal to the circle and p
     Vec normal(const Vec& p) const {
         return (p - center).normalize();
     }
@@ -100,6 +103,7 @@ Ray get_initial_ray(int x, int y, int width, int height, int fov=30) {
 }
 
 // Clamp a color vector to 8bit colors
+// (Nothing below 0 or above 255)
 void color_clamp(Vec& v) {
     v.x = (v.x > 255) ? 255 : (v.x < 0) ? 0 : v.x;
     v.y = (v.y > 255) ? 255 : (v.y < 0) ? 0 : v.y;
@@ -107,8 +111,8 @@ void color_clamp(Vec& v) {
 }
 
 int main() {
-    const int WIDTH = 600, HEIGHT = 600;  // Image height and width
-    const Vec white(255,244,229), // Quick reference colors
+    const int WIDTH = 600, HEIGHT = 600;  // Image width and height
+    const Vec white(255,244,229),  // Quick reference colors
               black(0,0,0),
               red(230,0,0),
               green(0,230,0),
@@ -124,16 +128,19 @@ int main() {
     objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), green, .4*WIDTH));  // Sphere centered and with diameter half as wide as the screen
     objects.push_back(Sphere(Vec(.55*WIDTH, .3*HEIGHT, .04*WIDTH), red, .2*WIDTH));
     objects.push_back(Sphere(Vec(.35*WIDTH, .7*HEIGHT, .04*WIDTH), blue, .2*WIDTH));
-    objects.push_back(Sphere(Vec(1.5*WIDTH, 1.5*HEIGHT, .25*WIDTH), white, 1)); // Point light source at the same depth as the sphere
+    objects.push_back(Sphere(Vec(1.5*WIDTH, 1.5*HEIGHT, .25*WIDTH), white, 1));  // Point light source at the same depth as the sphere
 
+	Vec color;
+    Ray ray;
 	double t;
     int min_t;
-	Vec color;
 
+    // Render each pixel
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
+            // Initialize variables
             color = black;
-            const Ray ray = get_initial_ray(x,y,WIDTH,HEIGHT);
+            ray = get_initial_ray(x,y,WIDTH,HEIGHT);
             min_t = numeric_limits<int>::max();
             Sphere min_obj;
 
@@ -153,7 +160,7 @@ int main() {
                           l = (objects.back().center - p).normalize();
                 const double dt = dot(l, n);
 
-                color = (min_obj.color + objects.back().color*dt) * .5;
+                color = (min_obj.color + objects.back().color*dt) * .5;  // Set color
             }
 
             // Output color at current pixel
