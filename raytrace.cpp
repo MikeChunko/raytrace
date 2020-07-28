@@ -43,7 +43,7 @@ float dot(const Vec& a, const Vec& b) {
     return a.x*b.x + a.y*b.y + a.z*b.z;
 }
 
-ostream& operator<<(ostream& os, Vec const& v) {
+ostream& operator<<(ostream& os, const Vec& v) {
     os << '(' << v.x << ", " << v.y << ", " << v.z << ')';
     return os;
 }
@@ -65,24 +65,24 @@ ostream& operator<<(ostream& os, Ray const& r) {
 // Used in scene creation
 struct Sphere {
     Vec center, color;
-    float radius;
+    float radius, radius_sqr;
 
-    Sphere() { center = Vec(); color = Vec(); radius = 0; }
-    Sphere(const Vec& c, const Vec& col, float r) : center(c), color(col), radius(r) {}
+    Sphere() { center = Vec(); color = Vec(); radius = 0; radius_sqr = 0; }
+    Sphere(const Vec& c, const Vec& col, float r) : center(c), color(col), radius(r), radius_sqr(r*r) {}
 
     // Return true if ray intersects with the sphere
     // If true, t will hold the minimum intersecting t-value
-    bool intersect(const Ray& ray, float &t) const {
+    bool intersect(const Ray& ray, float& t) const {
         const Vec l = center - ray.origin;
         const float tca = dot(l, ray.direction);
         if (tca < 0)
             return false;
 
         const float d2 = dot(l, l) - tca*tca;
-        if (d2 > radius*radius)
+        if (d2 > radius_sqr)
             return false;
 
-        const float thc = sqrt(radius*radius - d2),
+        const float thc = sqrt(radius_sqr - d2),
                     t0 = tca - thc,
                     t1 = tca + thc;
 
@@ -105,9 +105,9 @@ struct Sphere {
 Ray get_initial_ray(int x, int y, int width, int height, int fov=30) {
     const float invWidth = 1 / float(width), invHeight = 1 / float(height),
                 aspectratio = width / float(height),
-                angle = tan(M_PI * 0.5 * fov / 180.),
-                xdir = (2 * ((x + 0.5) * invWidth) - 1) * angle * aspectratio,
-                ydir = (2 * ((y + 0.5) * invHeight) - 1) * angle;
+                angle = tan(M_PI * .5 * fov / 180.),
+                xdir = (2 * ((x + .5) * invWidth) - 1) * angle * aspectratio,
+                ydir = (2 * ((y + .5) * invHeight) - 1) * angle;
     return Ray(Vec(x,y,0), Vec(xdir,ydir,1).normalize());
 }
 
@@ -135,7 +135,7 @@ int main() {
     // Scene creation
     // Assume objects,back() is the light source
     vector<Sphere> objects; // Assume every obect in the sceneis a sphere for now
-    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, 0.425*WIDTH), green, .35*WIDTH));  // Sphere centered and with diameter half as wide as the screen
+    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), green, .35*WIDTH));  // Sphere centered and with diameter half as wide as the screen
     objects.push_back(Sphere(Vec(.55*WIDTH, .3*HEIGHT, .04*WIDTH), red, .15*WIDTH));
     objects.push_back(Sphere(Vec(.35*WIDTH, .7*HEIGHT, .075*WIDTH), blue, .12*WIDTH));
     objects.push_back(Sphere(Vec(.5*WIDTH, 10001*WIDTH, 0), white, 10000*WIDTH));  // Making a flat surface is too much effort
@@ -176,7 +176,7 @@ int main() {
                         continue;
 
                     t = INFINITY;
-                    if (obj->intersect(Ray(p + n * 1e-4, l), t) && t < min_t)
+                    if (obj->intersect(Ray(p, l), t) && t < min_t)
                         isShadow = true;
                 }
 
@@ -184,7 +184,6 @@ int main() {
                     color = (min_obj.color + (objects.back().color*dt)) * .5;  // Set color
                 else
                     color = min_obj.color * .075;
-                
             }
 
             // Output color at current pixel
