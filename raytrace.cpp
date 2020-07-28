@@ -72,17 +72,19 @@ struct Sphere {
 
     // Return true if ray intersects with the sphere
     // If true, t will hold the minimum intersecting t-value
-    bool intersect(const Ray& ray, double &t) const {
-        const Vec oc = ray.origin - center;
-        const double b = 2 * dot(oc, ray.direction),
-        			 c = dot(oc, oc) - radius*radius;
-        double disc = b*b - 4*c;
-
-        if (disc < 1e-3)  // Reasonably close to 0 should be accepted as being 0
+    bool intersect(const Ray& ray, float &t) const {
+        const Vec l = center - ray.origin;
+        const float tca = dot(l, ray.direction);
+        if (tca < 0)
             return false;
 
-        disc = sqrt(disc);
-        const double t0 = -b - disc, t1 = -b + disc;
+        const float d2 = dot(l, l) - tca*tca;
+        if (d2 > radius*radius)
+            return false;
+
+        const float thc = sqrt(radius*radius - d2),
+                    t0 = tca - thc,
+                    t1 = tca + thc;
 
         t = (t0 < t1) ? t0 : t1;
         return true;
