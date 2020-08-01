@@ -33,19 +33,14 @@ struct Vec {
 
     // Return a normalized unit vector (magnitude of 1)
     Vec normalize() const {
-        float length = sqrt(x*x + y*y + z*z);
+        const float length = sqrt(x*x + y*y + z*z);
         return Vec(x/length, y/length, z/length);
     }
 };
 
 // Return the dot product of two vectors
-float dot(const Vec& a, const Vec& b) {
+float inline dot(const Vec& a, const Vec& b) {
     return a.x*b.x + a.y*b.y + a.z*b.z;
-}
-
-ostream& operator<<(ostream& os, const Vec& v) {
-    os << '(' << v.x << ", " << v.y << ", " << v.z << ')';
-    return os;
 }
 
 // Raytracing ray
@@ -55,11 +50,6 @@ struct Ray {
     Ray() { origin = Vec(); direction = Vec(); }
     Ray(const Vec& o, const Vec& d) : origin(o), direction(d) {};
 };
-
-ostream& operator<<(ostream& os, Ray const& r) {
-    os << "[Origin: " << r.origin << ", Direction: " << r.direction << "]";
-    return os;
-}
 
 // Represent a sphere
 // Used in scene creation
@@ -111,9 +101,39 @@ Ray get_initial_ray(int x, int y, int width, int height, int fov=30) {
     return Ray(Vec(x,y,0), Vec(xdir,ydir,1).normalize());
 }
 
+// Return the closest interecting object with r
+Sphere min_intersect(const vector<Sphere>& objs, const Ray& r, float& min_t) {
+    Sphere min_obj;
+    float t = INFINITY;
+
+    for (auto obj = objs.begin(); obj < objs.end(); obj++) {
+        if (obj->intersect(r, t) && t < min_t) {
+            min_t = t;
+            min_obj = *obj;
+        }
+    }
+
+    return min_obj;
+}
+
+// Return true if there is an intersecting object between s and the light source
+// I.e. if s should have a shadow cast on it
+bool shadow(const Sphere& s, const vector<Sphere>& objs, const Ray& r, float min_t) {
+    float t = INFINITY;
+    for (auto obj = objs.begin(); obj < objs.end(); obj++) {
+        if (*obj == s)
+            continue;
+
+        if (obj->intersect(r, t) && t < min_t)
+            return true;
+    }
+
+    return false;
+}
+
 // Clamp a color vector to 8bit colors
 // (Nothing below 0 or above 255)
-void color_clamp(Vec& v) {
+void inline color_clamp(Vec& v) {
     v.x = (v.x > 255) ? 255 : (v.x < 0) ? 0 : v.x;
     v.y = (v.y > 255) ? 255 : (v.y < 0) ? 0 : v.y;
     v.z = (v.z > 255) ? 255 : (v.z < 0) ? 0 : v.z;
@@ -133,17 +153,17 @@ int main() {
     out << "P3\n" << WIDTH << ' ' << HEIGHT << " 255\n";
 
     // Scene creation
-    // Assume objects,back() is the light source
     vector<Sphere> objects; // Assume every obect in the sceneis a sphere for now
-    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), green, .35*WIDTH));  // Sphere centered and with diameter half as wide as the screen
+    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), green, .35*WIDTH));
     objects.push_back(Sphere(Vec(.55*WIDTH, .3*HEIGHT, .04*WIDTH), red, .15*WIDTH));
     objects.push_back(Sphere(Vec(.35*WIDTH, .7*HEIGHT, .075*WIDTH), blue, .12*WIDTH));
     objects.push_back(Sphere(Vec(.5*WIDTH, 10001*WIDTH, 0), white, 10000*WIDTH));  // Making a flat surface is too much effort
-    objects.push_back(Sphere(Vec(1.*WIDTH, .4*HEIGHT, -.2), whitish, 1));  // Point light source at the same depth as the sphere
+
+    const Sphere light(Vec(1.*WIDTH, .4*HEIGHT, -.2), whitish, 1);  // Point light source
 
 	Vec color;
     Ray ray;
-	float t, min_t;
+	float min_t;
 
     // Render each pixel
     for (int y = 0; y < HEIGHT; y++) {
@@ -152,36 +172,18 @@ int main() {
             color = black;
             ray = get_initial_ray(x,y,WIDTH,HEIGHT);
             min_t = INFINITY;
-            Sphere min_obj;
-
-            // Find closest interecting object
-            for (auto obj = objects.begin(); obj < objects.end() - 1; obj++) {
-                t = INFINITY;
-                if (obj->intersect(ray, t) && t < min_t) {
-                    min_t = t;
-                    min_obj = *obj;
-                }
-            }
+            Sphere min_obj = min_intersect(objects, ray, min_t);
 
             // There is an object the ray intersects with
             if (min_t != INFINITY) {
                 const Vec p = ray.origin + ray.direction*min_t,  // Position of intersection
                           n = min_obj.normal(p),  // Normal at the intersection point
-                          l = (objects.back().center - p).normalize();  // Direction to the light
+                          l = (light.center - p).normalize();  // Direction to the light
                 const float dt = dot(n, l);
 
-                bool isShadow = false;
-                for (auto obj = objects.begin(); obj < objects.end() - 1 && !isShadow; obj++) {
-                    if (*obj == min_obj)
-                        continue;
-
-                    t = INFINITY;
-                    if (obj->intersect(Ray(p, l), t) && t < min_t)
-                        isShadow = true;
-                }
-
-                if (!isShadow)
-                    color = (min_obj.color + (objects.back().color*dt)) * .5;  // Set color
+                // Check for and handle shadows
+                if (!shadow(min_obj, objects, Ray(p, l), min_t))
+                    color = (min_obj.color + (light.color*dt)) * .5;  // Set color
                 else
                     color = min_obj.color * .075;
             }
