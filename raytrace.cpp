@@ -23,6 +23,10 @@ struct Vec {
         return x == v.x && y == v.y && z == v.z;
     }
 
+    bool operator!=(const Vec& v) const {
+        return x != v.x || y != v.y || z != v.z;
+    }
+
     // Scalar operations
     Vec operator*(float c) const {
         return Vec(c * x, c * y, c * z);
@@ -43,7 +47,7 @@ float inline dot(const Vec& a, const Vec& b) {
     return a.x*b.x + a.y*b.y + a.z*b.z;
 }
 
-// Raytracing ray
+// Ray composed of an origin point and a direction
 struct Ray {
     Vec origin, direction;
 
@@ -131,6 +135,16 @@ bool shadow(const Sphere& s, const vector<Sphere>& objs, const Ray& r, float min
     return false;
 }
 
+// Average two color vectors into the first
+void inline color_average(Vec& v, const Vec w) {
+    if (v != Vec(0,0,0)) {  // Don't bother averaging against black
+        v.x = sqrt(v.x*v.x + w.x*w.x);
+        v.y = sqrt(v.y*v.y + w.y*w.y);
+        v.z = sqrt(v.z*v.z + w.z*w.z);
+    } else
+        v = w;
+}
+
 // Clamp a color vector to 8bit colors
 // (Nothing below 0 or above 255)
 void inline color_clamp(Vec& v) {
@@ -140,28 +154,31 @@ void inline color_clamp(Vec& v) {
 }
 
 int main() {
-    const int WIDTH = 600, HEIGHT = 600;  // Image width and height
-    const Vec white(230,230,230),  // Quick reference colors
-              whitish(255,242,226),
-              black(0,0,0),
-              red(230,0,0),
-              green(0,230,0),
-              blue(0,0,230);
+    const int WIDTH = 3840, HEIGHT = 2160;  // Image width and height
+    const Vec WHITE(230,230,230),  // Quick reference colors
+              BLACK(0,0,0),
+              RED(230,0,0),
+              GREEN(0,230,0),
+              BLUE(0,0,230),
+              YELLOW(230,230,0),
+              PINK(230,0,230);
 
     // Header for .ppm
     ofstream out = ofstream("result.ppm");
     out << "P3\n" << WIDTH << ' ' << HEIGHT << " 255\n";
 
     // Scene creation
-    vector<Sphere> objects; // Assume every obect in the sceneis a sphere for now
-    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), green, .35*WIDTH));
-    objects.push_back(Sphere(Vec(.55*WIDTH, .3*HEIGHT, .04*WIDTH), red, .15*WIDTH));
-    objects.push_back(Sphere(Vec(.35*WIDTH, .7*HEIGHT, .075*WIDTH), blue, .12*WIDTH));
-    objects.push_back(Sphere(Vec(.5*WIDTH, 10001*WIDTH, 0), white, 10000*WIDTH));  // Making a flat surface is too much effort
+    vector<Sphere> objects;  // Assume every obect in the scene is a sphere for now
+    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), GREEN, .35*WIDTH));
+    objects.push_back(Sphere(Vec(.55*WIDTH, .3*HEIGHT, .04*WIDTH), RED, .15*WIDTH));
+    objects.push_back(Sphere(Vec(.35*WIDTH, .7*HEIGHT, .075*WIDTH), BLUE, .12*WIDTH));
+    objects.push_back(Sphere(Vec(.5*WIDTH, 10001*WIDTH, 0), WHITE, 10000*WIDTH));  // Making a flat surface is too much effort
 
-    const Sphere light(Vec(1.*WIDTH, .4*HEIGHT, -.2), whitish, 1);  // Point light source
+    vector<Sphere> lights;  // Point light sources
+    lights.push_back(Sphere(Vec(1*WIDTH, .4*HEIGHT, -.2), PINK, 1));
+    lights.push_back(Sphere(Vec(0, .4*HEIGHT, -.2), YELLOW, 1));
 
-	Vec color;
+	Vec color, new_color;
     Ray ray;
 	float min_t;
 
@@ -169,23 +186,30 @@ int main() {
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             // Initialize variables
-            color = black;
+            color = BLACK;
             ray = get_initial_ray(x,y,WIDTH,HEIGHT);
             min_t = INFINITY;
             Sphere min_obj = min_intersect(objects, ray, min_t);
 
             // There is an object the ray intersects with
             if (min_t != INFINITY) {
-                const Vec p = ray.origin + ray.direction*min_t,  // Position of intersection
-                          n = min_obj.normal(p),  // Normal at the intersection point
-                          l = (light.center - p).normalize();  // Direction to the light
-                const float dt = dot(n, l);
+                // Calculate for every light source
+                for (auto light = lights.begin(); light < lights.end(); light++) {
+                    color_clamp(color);
+                    const Vec p = ray.origin + ray.direction*min_t,  // Position of intersection
+                              n = min_obj.normal(p),  // Normal at the intersection point
+                              l = (light->center - p).normalize();  // Direction to the light
+                    const float dt = dot(n, l);
 
-                // Check for and handle shadows
-                if (!shadow(min_obj, objects, Ray(p, l), min_t))
-                    color = (min_obj.color + (light.color*dt)) * .5;  // Set color
-                else
-                    color = min_obj.color * .075;
+                    // Check for and handle shadows
+                    if (!shadow(min_obj, objects, Ray(p, l), min_t)) {
+                        new_color = (min_obj.color + (light->color*dt)) * .5;
+                        color_clamp(new_color);
+                        color_average(color, new_color);
+                    } else {
+                        color_average(color, min_obj.color * .075);
+                    }
+                }
             }
 
             // Output color at current pixel
