@@ -154,7 +154,8 @@ void inline color_clamp(Vec& v) {
 }
 
 int main() {
-    const int WIDTH = 3840, HEIGHT = 2160;  // Image width and height
+    const int WIDTH = 600, HEIGHT = 600,  // Image width and height
+              SIZE = (WIDTH > HEIGHT) ? WIDTH : HEIGHT;
     const Vec WHITE(230,230,230),  // Quick reference colors
               BLACK(0,0,0),
               RED(230,0,0),
@@ -169,14 +170,14 @@ int main() {
 
     // Scene creation
     vector<Sphere> objects;  // Assume every obect in the scene is a sphere for now
-    objects.push_back(Sphere(Vec(.5*WIDTH, .5*HEIGHT, .425*WIDTH), GREEN, .35*WIDTH));
-    objects.push_back(Sphere(Vec(.55*WIDTH, .3*HEIGHT, .04*WIDTH), RED, .15*WIDTH));
-    objects.push_back(Sphere(Vec(.35*WIDTH, .7*HEIGHT, .075*WIDTH), BLUE, .12*WIDTH));
-    objects.push_back(Sphere(Vec(.5*WIDTH, 10001*WIDTH, 0), WHITE, 10000*WIDTH));  // Making a flat surface is too much effort
+    objects.push_back(Sphere(Vec(.5*SIZE, .5*SIZE, .425*SIZE),  GREEN, .35*SIZE));
+    objects.push_back(Sphere(Vec(.55*SIZE, .3*SIZE, .04*SIZE),  RED,   .15*SIZE));
+    objects.push_back(Sphere(Vec(.35*SIZE, .7*SIZE, .075*SIZE), BLUE,  .12*SIZE));
+    objects.push_back(Sphere(Vec(.5*SIZE, 10001*SIZE, 0),    WHITE,    10000*WIDTH));  // Making a flat surface is too much effort
 
     vector<Sphere> lights;  // Point light sources
-    lights.push_back(Sphere(Vec(1*WIDTH, .4*HEIGHT, -.2), PINK, 1));
-    lights.push_back(Sphere(Vec(0, .4*HEIGHT, -.2), YELLOW, 1));
+    lights.push_back(Sphere(Vec(WIDTH, .4*HEIGHT, -.2), PINK,   1));
+    lights.push_back(Sphere(Vec(0, .4*HEIGHT, -.2),     YELLOW, 1));
 
 	Vec color, new_color;
     Ray ray;
