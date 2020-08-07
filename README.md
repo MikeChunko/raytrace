@@ -7,8 +7,10 @@ Currently the ray tracer is capable of:
 - Ray tracing for an abritrary number of point light sources
 - Accurately simulating perspective projection
 - Basic shadows
+- Reflective materials
+- Refractive materials
 
-While this is missing some more advanced features (diffusion, reflections, etc.), it still generates good images and is a fine example of what ray tracing can do.
+While this is missing some more advanced features (fresnel equations, etc.), it still generates good images and is a fine example of what ray tracing can do.
 
 <p align="center">
   <img src="https://github.com/MikeChunko/raytrace/blob/master/result.png">
