@@ -5,7 +5,7 @@
 
 #define MAX_DEPTH 5
 #define FOV 30
-#define REFRACTION_INDEX 1.1
+#define REFRACTION_INDEX 1.2
 
 using namespace std;
 
@@ -119,13 +119,7 @@ Ray inline get_reflection_ray(const Vec dir, const Vec p, const Vec n) {
 
 // Return the ray used to trace refraction
 Ray inline get_refraction_ray(const Vec dir, const Vec p, Vec n) {
-    bool inside = false;
-    if (dot(dir, n) > 0) {
-        inside = true;
-        n = n * -1;
-    }
-
-    const float eta = (inside) ? REFRACTION_INDEX : 1/REFRACTION_INDEX,
+    const float eta = 1/REFRACTION_INDEX,
                 cosi = -dot(n, dir),
                 k = 1 - eta*eta * (1 - cosi*cosi);
     Vec refraction_dir = dir * eta + n * (eta * cosi - sqrt(k));
@@ -161,6 +155,28 @@ bool shadow(const Sphere& s, const vector<Sphere>& objs, const Ray& r, float min
     }
 
     return false;
+}
+
+// Return transmission of reflection obtained by Fresnel's equation
+float fresnel(const Vec& dir, const Vec& n) {
+    float cosi = -dot(dir, n),
+          etai = 1, etat = REFRACTION_INDEX;
+
+    if (cosi > 0)
+        swap(etai, etat);
+
+    float sint = etai / etat * sqrtf(max(0.f, 1 - cosi*cosi));
+
+    if (sint >= 1)
+        return 1;
+    else {
+        const float cost = sqrtf(max(0.f, 1 - sint*sint));
+        cosi = fabsf(cosi);
+        float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost)),
+              Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
+
+        return (Rs*Rs + Rp*Rp)/2;
+    }
 }
 
 // Average two color vectors into the first
@@ -200,15 +216,17 @@ Vec raytrace(const Ray& ray, const vector<Sphere> objects, const vector<Sphere> 
 
             // Handle reflection and refraction
             if (min_obj.isReflective && depth < MAX_DEPTH) {
-                Ray reflection_ray = get_reflection_ray(ray.direction, p, n);
-                Vec reflection_color = raytrace(reflection_ray, objects, lights, depth + 1, min_obj);
+                const Ray reflection_ray = get_reflection_ray(ray.direction, p, n);
+                const Vec reflection_color = raytrace(reflection_ray, objects, lights, depth + 1, min_obj);
 
-                Ray refraction_ray = get_refraction_ray(ray.direction, p, n);
-                Vec refraction_color = raytrace(refraction_ray, objects, lights, depth + 1, min_obj);
+                const Ray refraction_ray = get_refraction_ray(ray.direction, p, n);
+                const Vec refraction_color = raytrace(refraction_ray, objects, lights, depth + 1, min_obj);
 
-                // TODO: return fresnel_color(reflection_color, refraction_color);
-                color_average(reflection_color, refraction_color);
-                return  reflection_color;
+                // Combine reflection and refraction
+                const float kr = fresnel(ray.direction, n);
+                color = reflection_color * kr;
+                color_average(color, refraction_color * (1 - kr));
+                return  color;
             }
 
             // Check for and handle shadows
