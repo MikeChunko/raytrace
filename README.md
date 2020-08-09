@@ -10,7 +10,7 @@ Currently the ray tracer is capable of:
 - Reflective materials
 - Refractive materials
 
-While this is missing some more advanced features (fresnel equations, etc.), it still generates good images and is a fine example of what ray tracing can do.
+While this is missing some more advanced features, it is capable of generating a realistic image.
 
 <p align="center">
   <img src="https://github.com/MikeChunko/raytrace/blob/master/result.png">
