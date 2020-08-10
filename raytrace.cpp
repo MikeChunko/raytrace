@@ -1,11 +1,9 @@
 #include <fstream>
 #include <vector>
 #include <cmath>
-#include <iostream>
 
 #define MAX_DEPTH 5
 #define FOV 30
-#define REFRACTION_INDEX 1.2
 
 using namespace std;
 
@@ -27,7 +25,6 @@ struct Vec {
     bool operator==(const Vec& v) const {
         return x == v.x && y == v.y && z == v.z;
     }
-
     bool operator!=(const Vec& v) const {
         return x != v.x || y != v.y || z != v.z;
     }
@@ -35,9 +32,6 @@ struct Vec {
     // Scalar operations
     Vec operator*(float c) const {
         return Vec(c * x, c * y, c * z);
-    }
-    Vec operator/(float c) const {
-        return Vec(x / c, y / c, z / c);
     }
 
     // Return a normalized unit vector (magnitude of 1)
@@ -65,10 +59,11 @@ struct Ray {
 struct Sphere {
     Vec center, color;
     float radius, radius_sqr;
-    bool isReflective;
+    bool reflective;
+    float ior;  // Index of refraction equal to 0 means non-refractive
 
-    Sphere() { center = Vec(); color = Vec(); radius = 0; radius_sqr = 0; isReflective = false; }
-    Sphere(const Vec& c, const Vec& col, float r, bool b) : center(c), color(col), radius(r), radius_sqr(r*r), isReflective(b) {}
+    Sphere() { center = Vec(); color = Vec(); radius = 0; radius_sqr = 0; reflective = false; ior = 0.f; }
+    Sphere(const Vec& c, const Vec& col, float r, bool ref, float ior) : center(c), color(col), radius(r), radius_sqr(r*r), reflective(ref), ior(ior) {}
 
     // Return true if ray intersects with the sphere
     // If true, t will hold the minimum intersecting t-value
@@ -100,6 +95,13 @@ struct Sphere {
     }
 };
 
+// Sphere with light output
+struct PointLight : Sphere {
+    float brightness;
+
+    PointLight(const Vec& c, const Vec& col, float r, float b) : Sphere(c, col, r, false, 0.f), brightness(b) {}
+};
+
 // Return the initial ray center at the given (x, y) coordinates
 // Use perspective to determine the direction
 Ray get_initial_ray(int x, int y, int width, int height) {
@@ -118,8 +120,8 @@ Ray inline get_reflection_ray(const Vec dir, const Vec p, const Vec n) {
 }
 
 // Return the ray used to trace refraction
-Ray inline get_refraction_ray(const Vec dir, const Vec p, Vec n) {
-    const float eta = 1/REFRACTION_INDEX,
+Ray inline get_refraction_ray(const Vec dir, const Vec p, const Vec n, float ior) {
+    const float eta = 1/ior,
                 cosi = -dot(n, dir),
                 k = 1 - eta*eta * (1 - cosi*cosi);
     Vec refraction_dir = dir * eta + n * (eta * cosi - sqrt(k));
@@ -158,22 +160,22 @@ bool shadow(const Sphere& s, const vector<Sphere>& objs, const Ray& r, float min
 }
 
 // Return transmission of reflection obtained by Fresnel's equation
-float fresnel(const Vec& dir, const Vec& n) {
+float fresnel(const Vec& dir, const Vec& n, float ior) {
     float cosi = -dot(dir, n),
-          etai = 1, etat = REFRACTION_INDEX;
+          etai = 1, etat = ior;
 
     if (cosi > 0)
         swap(etai, etat);
 
-    float sint = etai / etat * sqrtf(max(0.f, 1 - cosi*cosi));
+    const float sint = etai / etat * sqrtf(max(0.f, 1 - cosi*cosi));
 
     if (sint >= 1)
         return 1;
     else {
         const float cost = sqrtf(max(0.f, 1 - sint*sint));
         cosi = fabsf(cosi);
-        float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost)),
-              Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
+        const float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost)),
+                    Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
 
         return (Rs*Rs + Rp*Rp)/2;
     }
@@ -215,18 +217,30 @@ Vec raytrace(const Ray& ray, const vector<Sphere> objects, const vector<Sphere> 
             const float dt = dot(n, l);
 
             // Handle reflection and refraction
-            if (min_obj.isReflective && depth < MAX_DEPTH) {
-                const Ray reflection_ray = get_reflection_ray(ray.direction, p, n);
-                const Vec reflection_color = raytrace(reflection_ray, objects, lights, depth + 1, min_obj);
+            if ((min_obj.reflective || min_obj.ior != 0.f) && depth < MAX_DEPTH) {
+                Vec reflection_color, refraction_color;
 
-                const Ray refraction_ray = get_refraction_ray(ray.direction, p, n);
-                const Vec refraction_color = raytrace(refraction_ray, objects, lights, depth + 1, min_obj);
+                if (min_obj.reflective) {
+                    const Ray reflection_ray = get_reflection_ray(ray.direction, p, n);
+                    reflection_color = raytrace(reflection_ray, objects, lights, depth + 1, min_obj);
+                }
+
+                if (min_obj.ior != 0.f) {
+                    const Ray refraction_ray = get_refraction_ray(ray.direction, p, n, min_obj.ior);
+                    refraction_color = raytrace(refraction_ray, objects, lights, depth + 1, min_obj);
+                }
 
                 // Combine reflection and refraction
-                const float kr = fresnel(ray.direction, n);
-                color = reflection_color * kr;
-                color_average(color, refraction_color * (1 - kr));
-                return  color;
+                const float kr = fresnel(ray.direction, n, min_obj.ior);
+                if (min_obj.reflective && min_obj.ior != 0.f) {
+                    color = reflection_color * kr;
+                    color_average(color, refraction_color * (1 - kr));
+                } else if (min_obj.ior == 0.f)  // Only reflective
+                    color = reflection_color * kr;
+                else  // Only refractive
+                    color = refraction_color * (1 - kr);
+                color_average(color, (min_obj.color + (light->color*dt)) * .15);  // Mix in original color
+                return color;
             }
 
             // Check for and handle shadows
@@ -258,13 +272,13 @@ int main() {
 
     // Scene creation
     vector<Sphere> objects;  // Assume every obect in the scene is a sphere for now
-    objects.push_back(Sphere(Vec(.5*SIZE, .5*SIZE, .425*SIZE),  GREEN, .35*SIZE,    true));
-    objects.push_back(Sphere(Vec(.55*SIZE, .3*SIZE, .04*SIZE),  RED,   .15*SIZE,    false));
-    objects.push_back(Sphere(Vec(.35*SIZE, .7*SIZE, .075*SIZE), BLUE,  .12*SIZE,    false));
-    objects.push_back(Sphere(Vec(.5*SIZE, 10001*SIZE, 0),    WHITE,    10000*WIDTH, false));  // Making a flat surface is too much effort
+    objects.push_back(Sphere(Vec(.5*SIZE, .5*SIZE, .425*SIZE),  GREEN, .35*SIZE, true,  0.f));
+    objects.push_back(Sphere(Vec(.55*SIZE, .3*SIZE, .04*SIZE),  RED,   .15*SIZE, false, 0.f));
+    objects.push_back(Sphere(Vec(.35*SIZE, .7*SIZE, .075*SIZE), BLUE,  .12*SIZE, false, 0.f));
+    objects.push_back(Sphere(Vec(.5*SIZE, 10001*SIZE, 0),    WHITE,    10000*WIDTH, false, 0.f));  // Making a flat surface is too much effort
 
     vector<Sphere> lights;  // Point light sources
-    lights.push_back(Sphere(Vec(WIDTH, .4*HEIGHT, -.2), WHITE, 1, false));
+    lights.push_back(PointLight(Vec(WIDTH, .4*HEIGHT, -.2), WHITE, 1, 1.0));
 
 	Vec color;
     Ray ray;
