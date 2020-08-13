@@ -56,7 +56,8 @@ struct Ray {
 
 // Represent a sphere
 // Used in scene creation
-struct Sphere {
+class Sphere {
+public:
     Vec center, color;
     float radius, radius_sqr;
     bool reflective;
@@ -96,13 +97,14 @@ struct Sphere {
 };
 
 // Sphere with light output
-struct PointLight : Sphere {
+class PointLight : public Sphere {
+public:
     float brightness;
 
-    PointLight(const Vec& c, const Vec& col, float r, float b) : Sphere(c, col, r, false, 0.f), brightness(b) {}
+    PointLight(const Vec& c, const Vec& col, float b) : Sphere(c, col, 1.0, false, 0.f), brightness(b) {}
 };
 
-// Return the initial ray center at the given (x, y) coordinates
+// Return the initial ray centered at the given (x, y) coordinates
 // Use perspective to determine the direction
 Ray get_initial_ray(int x, int y, int width, int height) {
     const float invWidth = 1 / float(width), invHeight = 1 / float(height),
@@ -149,7 +151,7 @@ Sphere min_intersect(const vector<Sphere>& objs, const Ray& r, float& min_t, con
 bool shadow(const Sphere& s, const vector<Sphere>& objs, const Ray& r, float min_t) {
     float t = INFINITY;
     for (auto obj = objs.begin(); obj < objs.end(); obj++) {
-        if (*obj == s)
+        if (*obj == s)  // Ignore self
             continue;
 
         if (obj->intersect(r, t) && t < min_t)
@@ -200,7 +202,7 @@ void inline color_clamp(Vec& v) {
 }
 
 // Return the calculated color for the given ray using ray tracing
-Vec raytrace(const Ray& ray, const vector<Sphere> objects, const vector<Sphere> lights, const int depth, const Sphere ignore){
+Vec raytrace(const Ray& ray, const vector<Sphere> objects, const vector<PointLight> lights, const int depth, const Sphere ignore){
      // Initialize variables
     Vec color(0,0,0);
     float min_t = INFINITY;
@@ -220,12 +222,12 @@ Vec raytrace(const Ray& ray, const vector<Sphere> objects, const vector<Sphere> 
             if ((min_obj.reflective || min_obj.ior != 0.f) && depth < MAX_DEPTH) {
                 Vec reflection_color, refraction_color;
 
-                if (min_obj.reflective) {
+                if (min_obj.reflective) {  // Compute reflected color
                     const Ray reflection_ray = get_reflection_ray(ray.direction, p, n);
                     reflection_color = raytrace(reflection_ray, objects, lights, depth + 1, min_obj);
                 }
 
-                if (min_obj.ior != 0.f) {
+                if (min_obj.ior != 0.f) {  // Compute refracted color
                     const Ray refraction_ray = get_refraction_ray(ray.direction, p, n, min_obj.ior);
                     refraction_color = raytrace(refraction_ray, objects, lights, depth + 1, min_obj);
                 }
@@ -245,7 +247,7 @@ Vec raytrace(const Ray& ray, const vector<Sphere> objects, const vector<Sphere> 
 
             // Check for and handle shadows
             if (!shadow(min_obj, objects, Ray(p, l), min_t)) {
-                Vec new_color = (min_obj.color + (light->color*dt)) * .5;
+                Vec new_color = (min_obj.color + (light->color*light->brightness*dt)) * .5;
                 color_clamp(new_color);
                 color_average(color, new_color);
             } else {
@@ -277,8 +279,8 @@ int main() {
     objects.push_back(Sphere(Vec(.35*SIZE, .7*SIZE, .075*SIZE), BLUE,  .12*SIZE, false, 0.f));
     objects.push_back(Sphere(Vec(.5*SIZE, 10001*SIZE, 0),    WHITE,    10000*WIDTH, false, 0.f));  // Making a flat surface is too much effort
 
-    vector<Sphere> lights;  // Point light sources
-    lights.push_back(PointLight(Vec(WIDTH, .4*HEIGHT, -.2), WHITE, 1, 1.0));
+    vector<PointLight> lights;  // Point light sources
+    lights.push_back(PointLight(Vec(WIDTH, .4*HEIGHT, -.2), WHITE, 1.0));
 
 	Vec color;
     Ray ray;
